@@ -112,7 +112,18 @@ const KEY = "xray-runs-v1";
 const loadStore = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
 const saveStore = r => { try { localStorage.setItem(KEY, JSON.stringify(r.slice(0, 30))); } catch {} };
 
-async function api(name, body) {
+async function api(name, body, tries = 3) {
+  try { return await apiOnce(name, body); }
+  catch (e) {
+    if (tries > 1 && /busy|rate-limited|timed out|valid JSON/i.test(e.message)) {   // free-tier model hiccup: retry the step
+      await new Promise(r => setTimeout(r, 3000));
+      return api(name, body, tries - 1);
+    }
+    throw e;
+  }
+}
+
+async function apiOnce(name, body) {
   const headers = { "Content-Type": "application/json" };
   const code = $("#code").value || sessionStorage.getItem("xray-code") || "";
   if (code) headers["x-access-code"] = code;

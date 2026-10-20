@@ -174,37 +174,37 @@ def provider():
 
 def gemini(prompt):
     key = os.environ["GEMINI_API_KEY"]
-    models = [os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")] + [
-        m.strip() for m in os.environ.get("GEMINI_FALLBACKS", "gemini-3.5-flash,gemini-3.8-flash").split(",") if m.strip()]
+    models = [os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")] + [
+        m.strip() for m in os.environ.get("GEMINI_FALLBACKS", "gemini-3.1-flash-lite,gemini-3.6-flash").split(",") if m.strip()]
     body = json.dumps({"contents": [{"parts": [{"text": prompt}]}],
                        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}).encode()
     deadline = time.time() + 52          # stay inside a 60 s serverless limit
-    last = ""
+    fails = []
     for model in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         left = deadline - time.time()
-        if left < 8:
+        if left < 6:
             break
         req = urllib.request.Request(url, body, {"Content-Type": "application/json", "x-goog-api-key": key})
         try:
-            with urllib.request.urlopen(req, timeout=min(left, 28)) as r:
+            with urllib.request.urlopen(req, timeout=min(left, 20)) as r:
                 d = json.load(r)
         except urllib.error.HTTPError as e:
-            last = f"{model}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:200]}"
+            fails.append(f"{model}: HTTP {e.code}")
             continue                      # overloaded, rate limited or retired: try the next model
         except (TimeoutError, OSError) as e:
-            last = f"{model}: {type(e).__name__}"
+            fails.append(f"{model}: timed out")
             continue
         cands = d.get("candidates") or []
         if not cands or not cands[0].get("content"):
-            last = f"{model}: no answer " + json.dumps(d.get("promptFeedback") or "")[:150]
+            fails.append(f"{model}: empty answer")
             continue
         text = "".join(p.get("text", "") for p in cands[0]["content"].get("parts", []))
         u = d.get("usageMetadata", {})
         return text, {"in": u.get("promptTokenCount", 0),
                       "out": u.get("candidatesTokenCount", 0) + u.get("thoughtsTokenCount", 0),
                       "cost": 0.0, "model": model}
-    raise ModelError("Gemini is busy or rate-limited right now. Wait a minute and try again. (" + last + ")")
+    raise ModelError("Gemini is busy or rate-limited right now. Wait a minute and try again. (" + "; ".join(fails) + ")")
 
 
 def claude_cli(prompt):
