@@ -1,0 +1,1 @@
+Narrative X-Ray. Deploy: push this folder's contents to a GitHub repo, import it in Vercel, then set GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY and ACCESS_CODE as environment variables. Run supabase.sql once in Supabase.

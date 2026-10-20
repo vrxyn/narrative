@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Narrative X-Ray</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: input bar, then the X-Ray (four questions, gaps lit) beside its evidence; run history below. */
+:root{
+  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#13202C; --mute:#5A6B7B; --line:#D5DCE3;
+  --accent:#0A6C74; --accent-ink:#FFFFFF; --accent-soft:#D9EEF0;
+  --known:#2E6B3A; --known-soft:#DFF0E2; --inf:#4A4F9C; --inf-soft:#E4E5F6;
+  --unk:#9A6200; --unk-soft:#FBEFD2; --con:#B3261E; --con-soft:#FBE4E1;
+  --display:'Schibsted Grotesk',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E161D; --panel:#16212B; --ink:#E6EDF3; --mute:#93A3B2; --line:#26343F;
+  --accent:#4FC3CC; --accent-ink:#06191B; --accent-soft:#12383C;
+  --known:#7BD18A; --known-soft:#1B3322; --inf:#A7ABF2; --inf-soft:#24264A;
+  --unk:#F2B84B; --unk-soft:#3E2F10; --con:#FF8A80; --con-soft:#43201D; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.55 var(--display);padding-inline:16px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 60px}
+.top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand{font-weight:800;font-size:22px;letter-spacing:-.01em}
+.tag{font:500 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+form{display:grid;grid-template-columns:2fr 1.5fr 1.5fr auto;align-items:end;gap:10px;margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+label{display:grid;gap:4px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);min-width:0}
+input{font:15px var(--display);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%}
+input:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+button{font:700 14px var(--display);border:0;border-radius:6px;cursor:pointer}
+.go{background:var(--accent);color:var(--accent-ink);padding:0 22px;align-self:end;height:42px}
+.go:disabled{opacity:.5;cursor:wait}
+.hint{color:var(--mute);font-size:13px;margin:8px 2px 0}
+#status{margin-top:18px}
+#codewrap{grid-column:1/-1;max-width:260px}
+.prog{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:13px/1.7 var(--mono);color:var(--mute)}
+.prog .now{color:var(--ink)}
+.err{background:var(--con-soft);color:var(--con);border-radius:10px;padding:14px 16px;font-size:14.5px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:18px;margin-top:18px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px}
+h1{font-size:clamp(24px,3.4vw,32px);line-height:1.15;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.sub{color:var(--mute);font-size:13.5px;margin-top:6px;word-break:break-all}
+.headline{margin:16px 0 0;font-size:18px;line-height:1.45;font-weight:500;text-wrap:pretty}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px;font:12px var(--mono);color:var(--mute);font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink);font-weight:500}
+.sec{border-top:1px solid var(--line);padding-block:16px;margin-top:16px}
+.sec h2{margin:0 0 10px;font:500 11.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+.sec.gaps{background:var(--con-soft);border-top:0;margin-inline:-22px;padding-inline:22px}
+.sec.gaps h2{color:var(--con)}
+.pts{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.pt{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px;align-items:start}
+.lab{font:500 10.5px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;padding:5px 7px;border-radius:99px;text-align:center}
+.known{background:var(--known-soft);color:var(--known)} .inferred{background:var(--inf-soft);color:var(--inf)}
+.unknown{background:var(--unk-soft);color:var(--unk)} .conflicting{background:var(--con-soft);color:var(--con)}
+.sec.gaps .conflicting{background:var(--panel)}
+.cites{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px;vertical-align:1px}
+.cite{font:500 11px var(--mono);background:var(--accent-soft);color:var(--accent);padding:2px 6px;border-radius:4px}
+.cite:hover,.cite.on{background:var(--accent);color:var(--accent-ink)}
+.opener{margin-top:16px;border:1px dashed var(--line);border-radius:8px;padding:14px}
+.opener p{margin:6px 0 10px}
+.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:7px 12px;font-size:13px}
+aside h3{margin:0 0 4px;font-size:16px}
+aside .note{color:var(--mute);font-size:13px;margin:0 0 12px}
+.claims{list-style:none;margin:0;padding:0;display:grid;gap:10px;max-height:72vh;overflow:auto}
+.cl{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13.5px}
+.cl.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.cl .h{display:flex;gap:8px;align-items:center;font:500 11px var(--mono);color:var(--mute)}
+.cl q{display:block;margin:6px 0 4px;color:var(--ink)}
+.cl a{color:var(--accent);font-size:12px;word-break:break-all}
+.v-exact{color:var(--known)} .v-fuzzy{color:var(--unk)} .v-failed{color:var(--con)}
+.cl.failed{opacity:.6}
+.hist{margin-top:28px}
+.hist h2{font:500 11.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin:0 0 8px}
+.tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left}
+th{font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--accent-soft)}
+tr:last-child td{border-bottom:0}
+.empty{color:var(--mute);padding:14px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:860px){form{grid-template-columns:1fr}.go{width:100%}.grid{grid-template-columns:1fr}.claims{max-height:none}}
+@media (max-width:520px){.pt{grid-template-columns:1fr;gap:6px}.lab{justify-self:start}.card{padding:16px}.sec.gaps{margin-inline:-16px;padding-inline:16px}}
+</style></head>
+<body><div class="wrap">
+<div class="top"><span class="brand">Narrative X-Ray</span><span class="tag">public material only</span></div>
+
+<form id="f">
+  <label for="url">Company website<input id="url" name="url" placeholder="cyclops.io" required autocomplete="off"></label>
+  <label for="buyer">Target buyer (optional)<input id="buyer" name="buyer" placeholder="Payments ops leads at large PSPs"></label>
+  <label for="objective">Objective (optional)<input id="objective" name="objective" placeholder="Meetings with top payment platforms"></label>
+  <label for="code" id="codewrap" hidden>Access code<input id="code" name="code" type="password" autocomplete="off"></label>
+  <button class="go" id="go" type="submit">Run X-Ray</button>
+</form>
+<p class="hint">Reads up to 8 pages of the site, extracts claims with exact quotes, checks every quote against the page text, then writes the X-Ray from verified claims only. Takes about a minute.</p>
+
+<div id="status"></div>
+<div id="out"></div>
+
+<section class="hist"><h2>Runs</h2><div class="tw"><table>
+<thead><tr><th>When</th><th>Company</th><th>Buyer</th><th>Verified</th><th>Tokens in / out</th><th>Cost</th><th>Time</th><th>Model</th></tr></thead>
+<tbody id="runs"><tr><td colspan="8" class="empty">No runs yet. Runs are kept in this browser.</td></tr></tbody></table></div></section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const SECS = [["sells","1  What they actually sell"],["buyer","2  Who appears to buy it"],["beliefs","3  What they ask the buyer to believe"],["gaps","4  Where the evidence is thin"]];
+
+let CFG = { auth_required: false, provider: "" };
+const KEY = "xray-runs-v1";
+const loadStore = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
+const saveStore = r => { try { localStorage.setItem(KEY, JSON.stringify(r.slice(0, 30))); } catch {} };
+
+async function api(name, body) {
+  const headers = { "Content-Type": "application/json" };
+  const code = $("#code").value || sessionStorage.getItem("xray-code") || "";
+  if (code) headers["x-access-code"] = code;
+  const r = await fetch("/api/" + name, { method: "POST", headers, body: JSON.stringify(body || {}) });
+  const text = await r.text();
+  let j; try { j = JSON.parse(text); } catch { throw new Error(r.status === 504 || /timeout|FUNCTION_INVOCATION/i.test(text) ? "The step timed out. Try again." : "Server error (" + r.status + ")."); }
+  if (!r.ok) throw new Error(j.error || "Request failed");
+  return j;
+}
+
+$("#f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = $("#url").value, buyer = $("#buyer").value.trim(), objective = $("#objective").value.trim();
+  if (CFG.auth_required) { try { sessionStorage.setItem("xray-code", $("#code").value); } catch {} }
+  $("#go").disabled = true; $("#out").textContent = "";
+  const t0 = Date.now(), done = [];
+  const step = m => progress(done.concat(["~" + m]));
+  try {
+    step("Reading the website");
+    const cr = await api("crawl", { url });
+    done.push(`Read ${cr.pages.length} pages (${cr.chunks.length} text chunks)`);
+    step("Extracting claims and checking each quote against the page");
+    const cl = await api("claims", { url: cr.url, chunks: cr.chunks });
+    const ok = cl.claims.filter(c => c.verified !== "failed").length;
+    done.push(`${ok} of ${cl.claims.length} claims verified against the site`);
+    step("Writing the X-Ray from verified claims");
+    const xr = await api("xray", { url: cr.url, buyer, objective, claims: cl.claims });
+    const u1 = cl.usage, u2 = xr.usage;
+    const stats = { pages: cr.pages.length, chunks: cr.chunks.length, claims: cl.claims.length, verified: ok,
+      verify_rate: cl.claims.length ? ok / cl.claims.length : 0, points: xr.points, points_cited: xr.points_cited,
+      bad_citations: xr.bad_citations, tokens_in: u1.in + u2.in, tokens_out: u1.out + u2.out,
+      cost_usd: Math.round((u1.cost + u2.cost) * 10000) / 10000, model: u1.model, provider: CFG.provider,
+      seconds: Math.round((Date.now() - t0) / 100) / 10 };
+    const res = { url: cr.url, buyer, objective, company: xr.xray.company || cl.company || "", xray: xr.xray,
+      claims: cl.claims, pages: cr.pages, stats, ts: new Date().toISOString() };
+    api("log", { url: res.url, company: res.company, buyer, objective, stats, result: res }).catch(() => {});
+    const store = loadStore(); store.unshift(res); saveStore(store);
+    $("#status").textContent = ""; $("#go").disabled = false; render(res); loadRuns();
+  } catch (err) { fail(err.message); }
+});
+
+function progress(lines) {
+  const box = h("div", "prog");
+  lines.forEach(l => box.appendChild(l.startsWith("~") ? h("div", "now", "▸ " + l.slice(1) + "…") : h("div", null, "✓ " + l)));
+  $("#status").replaceChildren(box);
+}
+function fail(msg) { $("#go").disabled = false; $("#status").replaceChildren(h("div", "err", msg)); }
+
+function render(res) {
+  const x = res.xray, s = res.stats, claims = Object.fromEntries(res.claims.map(c => [c.id, c]));
+  const main = h("article", "card");
+  main.appendChild(h("h1", null, res.company || res.url));
+  const sub = h("div", "sub");
+  sub.textContent = res.url + (res.buyer ? "  ·  Buyer: " + res.buyer : "") + (res.objective ? "  ·  Objective: " + res.objective : "");
+  main.appendChild(sub);
+  if (x.headline) main.appendChild(h("p", "headline", x.headline));
+  const st = h("div", "stats");
+  [["pages", s.pages], ["claims verified", `${s.verified}/${s.claims} (${Math.round(s.verify_rate*100)}%)`],
+   ["points cited", `${s.points_cited}/${s.points}`], ["tokens", `${s.tokens_in.toLocaleString()} in / ${s.tokens_out.toLocaleString()} out`],
+   ["cost", "$" + s.cost_usd.toFixed(3)], ["time", s.seconds + "s"]].forEach(([k, v]) => { const sp = h("span"); sp.append(k + " "); sp.appendChild(h("b", null, v)); st.appendChild(sp); });
+  main.appendChild(st);
+
+  SECS.forEach(([key, title]) => {
+    const sec = h("section", "sec" + (key === "gaps" ? " gaps" : ""));
+    sec.appendChild(h("h2", null, title));
+    const ul = h("ul", "pts");
+    (x[key] || []).forEach(p => {
+      const li = h("li", "pt");
+      li.appendChild(h("span", "lab " + (p.label || "inferred"), p.label || "inferred"));
+      const t = h("div"); t.append(p.text);
+      if (p.claims && p.claims.length) {
+        const cs = h("span", "cites");
+        p.claims.forEach(id => { const b = h("button", "cite", id); b.type = "button"; b.onclick = () => focusClaim(id); cs.appendChild(b); });
+        t.appendChild(cs);
+      }
+      li.appendChild(t); ul.appendChild(li);
+    });
+    sec.appendChild(ul); main.appendChild(sec);
+  });
+
+  if (x.opener) {
+    const o = h("div", "opener");
+    const lab = h("div", "tag", "Email opener"); o.appendChild(lab);
+    o.appendChild(h("p", null, x.opener));
+    const b = h("button", "ghost", "Copy"); b.type = "button";
+    b.onclick = async () => { try { await navigator.clipboard.writeText(x.opener); b.textContent = "Copied"; } catch { b.textContent = "Select the text to copy"; } };
+    o.appendChild(b); main.appendChild(o);
+  }
+
+  const side = h("aside", "card");
+  side.appendChild(h("h3", null, "Evidence"));
+  side.appendChild(h("p", "note", "Each claim is quoted from the site and checked in code against the page text. Failed quotes are excluded from the X-Ray."));
+  const ul = h("ul", "claims");
+  res.claims.forEach(c => {
+    const li = h("li", "cl " + (c.verified === "failed" ? "failed" : "")); li.id = "c-" + c.id;
+    const hd = h("div", "h"); hd.append(c.id + " · " + (c.type || "")); hd.appendChild(h("span", "v-" + c.verified, c.verified === "failed" ? "✕ not found on page" : c.verified === "fuzzy" ? "≈ near match" : "✓ exact"));
+    li.appendChild(hd);
+    li.appendChild(h("q", null, c.quote));
+    if (c.url) { const a = h("a", null, c.url.replace(/^https?:\/\//, "")); a.href = c.url + "#:~:text=" + encodeURIComponent(c.quote.split(/\s+/).slice(0, 8).join(" ")); a.target = "_blank"; a.rel = "noopener"; li.appendChild(a); }
+    ul.appendChild(li);
+  });
+  side.appendChild(ul);
+
+  const g = h("div", "grid"); g.append(main, side);
+  $("#out").replaceChildren(g);
+  main.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+function focusClaim(id) {
+  document.querySelectorAll(".cl.on,.cite.on").forEach(e => e.classList.remove("on"));
+  const el = document.getElementById("c-" + id); if (!el) return;
+  el.classList.add("on"); el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  document.querySelectorAll(".cite").forEach(b => { if (b.textContent === id) b.classList.add("on"); });
+}
+
+function loadRuns() {
+  const rows = loadStore(), tb = $("#runs");
+  if (!rows.length) return;
+  tb.replaceChildren(...rows.map(r => {
+    const tr = h("tr"); tr.tabIndex = 0; const s = r.stats;
+    [r.ts.slice(0, 16).replace("T", " "), r.company || r.url, r.buyer || "inferred", Math.round(s.verify_rate * 100) + "%",
+     `${s.tokens_in.toLocaleString()} / ${s.tokens_out.toLocaleString()}`, s.cost_usd ? "$" + s.cost_usd.toFixed(3) : "free tier", s.seconds + "s",
+     s.provider || ""].forEach(v => tr.appendChild(h("td", null, v)));
+    const open = () => { $("#status").textContent = ""; render(r); };
+    tr.onclick = open; tr.onkeydown = e => { if (e.key === "Enter") open(); };
+    return tr;
+  }));
+}
+fetch("/api/config", { method: "POST" }).then(r => r.json()).then(c => {
+  CFG = c;
+  if (c.auth_required) { $("#codewrap").hidden = false; try { $("#code").value = sessionStorage.getItem("xray-code") || ""; } catch {} }
+}).catch(() => {});
+loadRuns();
+</script>
+</body></html>
