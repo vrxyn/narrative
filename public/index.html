@@ -98,7 +98,7 @@ tr:last-child td{border-bottom:0}
 <div id="out"></div>
 
 <section class="hist"><h2>Runs</h2><div class="tw"><table>
-<thead><tr><th>When</th><th>Company</th><th>Buyer</th><th>Verified</th><th>Tokens in / out</th><th>Cost</th><th>Time</th><th>Model</th></tr></thead>
+<thead><tr><th>When</th><th>Company</th><th>Buyer</th><th>Quotes found</th><th>Tokens in / out</th><th>Cost</th><th>Time</th><th>Model</th></tr></thead>
 <tbody id="runs"><tr><td colspan="8" class="empty">No runs yet. Runs are kept in this browser.</td></tr></tbody></table></div></section>
 </div>
 
@@ -148,7 +148,7 @@ $("#f").addEventListener("submit", async e => {
     step("Extracting claims and checking each quote against the page");
     const cl = await api("claims", { url: cr.url, chunks: cr.chunks });
     const ok = cl.claims.filter(c => c.verified !== "failed").length;
-    done.push(`${ok} of ${cl.claims.length} claims verified against the site`);
+    done.push(`${ok} of ${cl.claims.length} quotes found on the site`);
     step("Writing the X-Ray from verified claims");
     const xr = await api("xray", { url: cr.url, buyer, objective, claims: cl.claims });
     const u1 = cl.usage, u2 = xr.usage;
@@ -181,7 +181,7 @@ function render(res) {
   main.appendChild(sub);
   if (x.headline) main.appendChild(h("p", "headline", x.headline));
   const st = h("div", "stats");
-  [["pages", s.pages], ["claims verified", `${s.verified}/${s.claims} (${Math.round(s.verify_rate*100)}%)`],
+  [["pages", s.pages], ["quotes found on site", `${s.verified}/${s.claims} (${Math.round(s.verify_rate*100)}%)`],
    ["points cited", `${s.points_cited}/${s.points}`], ["tokens", `${s.tokens_in.toLocaleString()} in / ${s.tokens_out.toLocaleString()} out`],
    ["cost", "$" + s.cost_usd.toFixed(3)], ["time", s.seconds + "s"]].forEach(([k, v]) => { const sp = h("span"); sp.append(k + " "); sp.appendChild(h("b", null, v)); st.appendChild(sp); });
   main.appendChild(st);
