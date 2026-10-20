@@ -214,12 +214,12 @@ function render(res) {
   }
 
   const side = h("aside", "card");
-  side.appendChild(h("h3", null, "Evidence"));
-  side.appendChild(h("p", "note", "Each claim is quoted from the site and checked in code against the page text. Failed quotes are excluded from the X-Ray."));
+  side.appendChild(h("h3", null, "Claims"));
+  side.appendChild(h("p", "note", "These are the company's own statements. Code checked that each quote appears in the page text we read: that shows the quote is real, not that the claim is true. Quotes not found are left out of the X-Ray."));
   const ul = h("ul", "claims");
   res.claims.forEach(c => {
     const li = h("li", "cl " + (c.verified === "failed" ? "failed" : "")); li.id = "c-" + c.id;
-    const hd = h("div", "h"); hd.append(c.id + " · " + (c.type || "")); hd.appendChild(h("span", "v-" + c.verified, c.verified === "failed" ? "✕ not found on page" : c.verified === "fuzzy" ? "≈ near match" : "✓ exact"));
+    const hd = h("div", "h"); hd.append(c.id + " · " + (c.type || "")); hd.appendChild(h("span", "v-" + c.verified, c.verified === "failed" ? "quote not found on page" : c.verified === "fuzzy" ? "quote nearly matches page" : "quote found on page"));
     li.appendChild(hd);
     li.appendChild(h("q", null, c.quote));
     if (c.url) { const a = h("a", null, c.url.replace(/^https?:\/\//, "")); a.href = c.url + "#:~:text=" + encodeURIComponent(c.quote.split(/\s+/).slice(0, 8).join(" ")); a.target = "_blank"; a.rel = "noopener"; li.appendChild(a); }
