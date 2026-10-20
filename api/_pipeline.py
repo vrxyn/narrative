@@ -91,6 +91,28 @@ def fetch(url):
         return r.geturl(), r.read().decode("utf-8", "replace")
 
 
+def fetch_rendered(url):
+    """For sites that build their pages with JavaScript: a hosted headless browser (Jina Reader)
+    loads the page, runs its scripts and returns it as Markdown. Returns (url, text, links, title).
+    Set JINA_API_KEY for higher rate limits."""
+    headers = {"X-Engine": "browser", "X-Retain-Images": "none", "User-Agent": "Mozilla/5.0"}
+    if os.environ.get("JINA_API_KEY"):
+        headers["Authorization"] = "Bearer " + os.environ["JINA_API_KEY"]
+    req = urllib.request.Request("https://r.jina.ai/" + url, headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        md = r.read().decode("utf-8", "replace")
+    title = (re.search(r"^Title:\s*(.*)$", md, re.M) or [None, ""])[1].strip()
+    body = md.split("Markdown Content:", 1)[-1]
+    links = re.findall(r"\]\(([^)\s]+)", body)
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", body)                 # images
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)                 # [text](url) -> text
+    t = re.sub(r"^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+", "", t, flags=re.M)   # headings, quotes, list markers
+    t = re.sub(r"(\*\*|__|\*|`)", "", t).replace("|", " ")
+    t = re.sub(r"^\s*-{3,}\s*$", "", t, flags=re.M)
+    text = (title + "\n" + clean(t)).strip()[:MAX_CHARS_PAGE]
+    return url, text, links, title
+
+
 def parse(html):
     p = Extract()
     p.feed(html)
@@ -107,8 +129,17 @@ def normalize_url(u):
 
 
 def crawl(url, log=print):
-    root_url, html = fetch(normalize_url(url))
-    text, links, title = parse(html)
+    url = normalize_url(url)
+    try:
+        root_url, html = fetch(url)
+        text, links, title = parse(html)
+    except Exception as e:                    # blocked or broken for a plain fetch: try the browser
+        log(f"plain fetch failed ({e}), rendering instead")
+        root_url, text, links, title = url, "", [], ""
+    rendered = len(text) < 400                # an empty shell: the page is built by JavaScript
+    if rendered:
+        root_url, text, links, title = fetch_rendered(root_url)
+        log("site builds its pages with JavaScript: reading it through a headless browser")
     pages = [{"url": root_url, "title": title, "text": text}]
     host = urllib.parse.urlparse(root_url).netloc.replace("www.", "")
     cands = {}
@@ -123,12 +154,33 @@ def crawl(url, log=print):
         score = min((i for i, k in enumerate(PRIORITY) if k in path), default=99)
         score += path.count("/") * 0.1                       # shallower first
         cands[u] = min(score, cands.get(u, 999))
+    if len(cands) < 4:                       # few links found (menus built as buttons): try the sitemap
+        try:
+            req = urllib.request.Request(urllib.parse.urljoin(root_url, "/sitemap.xml"), headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", r.read().decode("utf-8", "replace"))[:200]
+            for u in locs:
+                u = u.split("#")[0].split("?")[0].rstrip("/")
+                pu = urllib.parse.urlparse(u)
+                if pu.netloc.replace("www.", "") != host or u == root_url.rstrip("/") or \
+                        re.search(r"\.(pdf|png|jpe?g|svg|zip)$|/(blog|news|careers|jobs|legal|privacy|terms)\b", u, re.I):
+                    continue
+                path = pu.path.lower()
+                score = min((i for i, k in enumerate(PRIORITY) if k in path), default=99) + path.count("/") * 0.1
+                cands[u] = min(score, cands.get(u, 999))
+        except Exception:
+            pass
     ranked = [u for u, _ in sorted(cands.items(), key=lambda x: x[1])][: MAX_PAGES * 2]
 
     def get_page(u):
         try:
-            final, h = fetch(u)
-            t, _, ti = parse(h)
+            if rendered:
+                final, t, _, ti = fetch_rendered(u)
+            else:
+                final, h = fetch(u)
+                t, _, ti = parse(h)
+                if len(t) < 200:                     # this one page is built by JavaScript
+                    final, t, _, ti = fetch_rendered(u)
             return {"url": final, "title": ti, "text": t}
         except Exception as e:
             log(f"skipped {u}: {e}")
